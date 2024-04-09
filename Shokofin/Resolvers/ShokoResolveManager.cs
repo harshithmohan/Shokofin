@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Emby.Naming.Common;
 using Emby.Naming.ExternalFiles;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
@@ -49,7 +50,7 @@ public class ShokoResolveManager
     // Note: Out of the 14k entries in my test shoko database, then only **319** entries have a title longer than 100 characters.
     private const int NameCutOff = 64;
 
-    private static readonly IReadOnlySet<string> IgnoreFolderNames = new HashSet<string>() {
+    private static readonly HashSet<string> IgnoreFolderNames = [
         "backdrops",
         "behind the scenes",
         "deleted scenes",
@@ -62,7 +63,7 @@ public class ShokoResolveManager
         "other",
         "extras",
         "trailers",
-    };
+    ];
 
     public bool IsCacheStalled => DataCache.IsStalled;
 
@@ -721,32 +722,32 @@ public class ShokoResolveManager
         return await GenerateLocationsForFile(vfsPath, collectionType, sourceLocation, fileId, seriesId);
     }
 
-    private async Task<(string sourceLocation, string[] symbolicLinks, DateTime? importedAt)> GenerateLocationsForFile(string vfsPath, string? collectionType, string sourceLocation, string fileId, string seriesId)
+    private async Task<(string sourceLocation, string[] symbolicLinks, DateTime? importedAt)> GenerateLocationsForFile(string vfsPath, CollectionType? collectionType, string sourceLocation, string fileId, string seriesId)
     {
         var season = await ApiManager.GetSeasonInfoForSeries(seriesId).ConfigureAwait(false);
         if (season == null)
-            return (string.Empty, Array.Empty<string>(), null);
+            return (string.Empty, [], null);
 
         var isMovieSeason = season.Type == SeriesType.Movie;
         var shouldAbort = collectionType switch {
-            CollectionType.TvShows => isMovieSeason && Plugin.Instance.Configuration.SeparateMovies,
-            CollectionType.Movies => !isMovieSeason,
+            CollectionType.tvshows => isMovieSeason && Plugin.Instance.Configuration.SeparateMovies,
+            CollectionType.movies => !isMovieSeason,
             _ => false,
         };
         if (shouldAbort)
-            return (string.Empty, Array.Empty<string>(), null);
+            return (string.Empty, [], null);
 
         var show = await ApiManager.GetShowInfoForSeries(seriesId).ConfigureAwait(false);
         if (show == null)
-            return (string.Empty, Array.Empty<string>(), null);
+            return (string.Empty, [], null);
 
         var file = await ApiManager.GetFileInfo(fileId, seriesId).ConfigureAwait(false);
-        var (episode, episodeXref, _) = (file?.EpisodeList ?? new()).FirstOrDefault();
+        var (episode, episodeXref, _) = (file?.EpisodeList ?? []).FirstOrDefault();
         if (file == null || episode == null)
-            return (string.Empty, Array.Empty<string>(), null);
+            return (string.Empty, [], null);
 
         if (season == null || episode == null)
-            return (string.Empty, Array.Empty<string>(), null);
+            return (string.Empty, [], null);
 
         var showName = show.DefaultSeason.AniDB.Title?.ReplaceInvalidPathCharacters() ?? $"Shoko Series {show.Id}";
         var episodeNumber = Ordering.GetEpisodeNumber(show, season, episode);
@@ -781,7 +782,7 @@ public class ShokoResolveManager
             _ => isExtra ? "-other" : string.Empty,
         };
         var filePartSuffix = (episodeXref.Percentage?.Size ?? 100) != 100 ? $".pt{episode.Shoko.CrossReferences.Where(xref => xref.ReleaseGroup == episodeXref.ReleaseGroup && xref.Percentage!.Size == episodeXref.Percentage!.Size).ToList().FindIndex(xref => xref.Percentage!.Start == episodeXref.Percentage!.Start && xref.Percentage!.End == episodeXref.Percentage!.End) + 1}" : "";
-        if (isMovieSeason && collectionType != CollectionType.TvShows) {
+        if (isMovieSeason && collectionType != CollectionType.tvshows) {
             if (!string.IsNullOrEmpty(extrasFolder)) {
                 foreach (var episodeInfo in season.EpisodeList)
                     folders.Add(Path.Join(vfsPath, $"{showName} [{ShokoSeriesId.Name}={show.Id}] [{ShokoEpisodeId.Name}={episodeInfo.Id}]", extrasFolder));
@@ -951,7 +952,7 @@ public class ShokoResolveManager
         }
     }
 
-    private IReadOnlyList<string> FindSubtitlesForPath(string sourcePath)
+    private List<string> FindSubtitlesForPath(string sourcePath)
     {
         var externalPaths = new List<string>();
         var folderPath = Path.GetDirectoryName(sourcePath);
@@ -1151,9 +1152,9 @@ public class ShokoResolveManager
 
     #region Resolvers
 
-    public async Task<BaseItem?> ResolveSingle(Folder? parent, string? collectionType, FileSystemMetadata fileInfo)
+    public async Task<BaseItem?> ResolveSingle(Folder? parent, CollectionType? collectionType, FileSystemMetadata fileInfo)
     {
-        if (!(collectionType == CollectionType.TvShows || collectionType == CollectionType.Movies || collectionType == null) || parent == null || fileInfo == null)
+        if (!(collectionType == CollectionType.tvshows || collectionType == CollectionType.movies || collectionType == null) || parent == null || fileInfo == null)
             return null;
 
         var root = LibraryManager.RootFolder;
@@ -1192,9 +1193,9 @@ public class ShokoResolveManager
         }
     }
 
-    public async Task<MultiItemResolverResult?> ResolveMultiple(Folder? parent, string? collectionType, List<FileSystemMetadata> fileInfoList)
+    public async Task<MultiItemResolverResult?> ResolveMultiple(Folder? parent, CollectionType? collectionType, List<FileSystemMetadata> fileInfoList)
     {
-        if (!(collectionType == CollectionType.TvShows || collectionType == CollectionType.Movies || collectionType == null) || parent == null)
+        if (!(collectionType == CollectionType.tvshows || collectionType == CollectionType.movies || collectionType == null) || parent == null)
             return null;
 
         var root = LibraryManager.RootFolder;
@@ -1214,7 +1215,7 @@ public class ShokoResolveManager
 
             // Redirect children of a VFS managed media folder to the VFS.
             if (parent.IsTopParent) {
-                var createMovies = collectionType == CollectionType.Movies || (collectionType == null && Plugin.Instance.Configuration.SeparateMovies);
+                var createMovies = collectionType == CollectionType.movies || (collectionType == null && Plugin.Instance.Configuration.SeparateMovies);
                 var items = FileSystem.GetDirectories(vfsPath)
                     .AsParallel()
                     .SelectMany(dirInfo => {
@@ -1356,7 +1357,7 @@ public class ShokoResolveManager
         }
     }
 
-    private async Task<bool> ShouldFilterDirectory(string partialPath, string fullPath, string? collectionType, bool shouldIgnore)
+    private async Task<bool> ShouldFilterDirectory(string partialPath, string fullPath, CollectionType? collectionType, bool shouldIgnore)
     {
         var season = await ApiManager.GetSeasonInfoByPath(fullPath).ConfigureAwait(false);
 
@@ -1389,13 +1390,13 @@ public class ShokoResolveManager
         // Filter library if we enabled the option.
         var isMovieSeason = season.Type == SeriesType.Movie;
         switch (collectionType) {
-            case CollectionType.TvShows:
+            case CollectionType.tvshows:
                 if (isMovieSeason && Plugin.Instance.Configuration.SeparateMovies) {
                     Logger.LogInformation("Found movie in show library and library separation is enabled, ignoring shoko series. (Series={SeriesId})", season.Id);
                     return true;
                 }
                 break;
-            case CollectionType.Movies:
+            case CollectionType.movies:
                 if (!isMovieSeason) {
                     Logger.LogInformation("Found show in movie library, ignoring shoko series. (Series={SeriesId})", season.Id);
                     return true;

@@ -14,7 +14,7 @@ public class ShokoIgnoreRule : IResolverIgnoreRule
         ResolveManager = resolveManager;
     }
 
-    public bool ShouldIgnore(FileSystemMetadata fileInfo, BaseItem parent)
+    public bool ShouldIgnore(FileSystemMetadata fileInfo, BaseItem? parent)
         => ResolveManager.ShouldFilterItem(parent as Folder, fileInfo)
             .ConfigureAwait(false)
             .GetAwaiter()
