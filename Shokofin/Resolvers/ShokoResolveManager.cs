@@ -817,7 +817,7 @@ public class ShokoResolveManager
 
         foreach (var symbolicLink in symbolicLinks)
             ApiManager.AddFileLookupIds(symbolicLink, fileId, seriesId, file.EpisodeList.Select(episode => episode.Id));
-        return (sourceLocation, symbolicLinks, file.Shoko.ImportedAt ?? file.Shoko.CreatedAt);
+        return (sourceLocation, symbolicLinks, (file.Shoko.ImportedAt ?? file.Shoko.CreatedAt).ToLocalTime());
     }
 
     public LinkGenerationResult GenerateSymbolicLinks(string sourceLocation, string[] symbolicLinks, DateTime importedAt)
@@ -848,7 +848,7 @@ public class ShokoResolveManager
 
                             Logger.LogWarning("Fixing broken symbolic link {Link} → {LinkTarget} (RealTarget={RealTarget})", symbolicLink, sourceLocation, nextTarget?.FullName);
                         }
-                        var date = File.GetCreationTime(symbolicLink);
+                        var date = File.GetCreationTime(symbolicLink).ToLocalTime();
                         if (date != importedAt) {
                             shouldFix = true;
 
