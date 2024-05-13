@@ -78,6 +78,15 @@ public class SeriesProvider : IRemoteMetadataProvider<Series, SeriesInfo>
                 OfficialRating = show.OfficialRating,
                 CustomRating = show.CustomRating,
                 CommunityRating = show.CommunityRating,
+                SeasonNames = show.SeasonOrderDictionary
+                    .ToDictionary(pair => pair.Key, pair => {
+                        var (seasonNumber, season) = pair;
+                        if (!show.TryGetBaseSeasonNumberForSeasonInfo(season, out var baseSeasonNumber))
+                            baseSeasonNumber = seasonNumber;
+                        var offset = Math.Abs(seasonNumber - baseSeasonNumber);
+                        var (displayTitle, _) = Text.GetSeasonTitles(season, offset, info.MetadataLanguage);
+                        return displayTitle;
+                    }),
             };
             result.HasMetadata = true;
             result.ResetPeople();
